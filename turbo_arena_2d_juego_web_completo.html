@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turbo Arena 2D - Vista Cenital Avanzada</title>
+  <!-- Tailwind CSS para diseño moderno UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- PeerJS para conexión WebRTC multijugador en tiempo real entre dispositivos -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    /* Estilos personalizados y animaciones */
+    @keyframes rainbowGlow {
+      0% { filter: hue-rotate(0deg) drop-shadow(0 0 10px rgba(255, 0, 0, 0.9)); }
+      50% { filter: hue-rotate(180deg) drop-shadow(0 0 16px rgba(0, 255, 255, 0.9)); }
+      100% { filter: hue-rotate(360deg) drop-shadow(0 0 10px rgba(255, 0, 0, 0.9)); }
+    }
+
+    .rainbow-skin {
+      animation: rainbowGlow 2.5s infinite linear;
+      background: linear-gradient(45deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff);
+      background-size: 200% 200%;
+    }
+
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.2);
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #3b82f6;
+      border-radius: 4px;
+    }
+
+    canvas {
+      touch-action: none;
+    }
+
+    @keyframes goalPulse {
+      0% { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+      50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    }
+
+    .animate-goal-banner {
+      animation: goalPulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-white font-sans overflow-hidden select-none">
+
+  <!-- APP CONTAINER -->
+  <div id="app" class="relative w-screen h-screen flex flex-col justify-between items-center bg-slate-950">
+
+    <!-- HUD SUPERIOR -->
+    <header id="top-hud" class="w-full bg-slate-900/90 border-b border-slate-800 px-6 py-2.5 flex justify-between items-center z-20">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center font-black text-lg shadow-lg border border-blue-400" id="user-avatar">
+          P
+        </div>
+        <div>
+          <h3 id="hud-username" class="font-bold text-sm text-slate-200">Jugador</h3>
+          <div class="flex items-center gap-2 text-xs text-slate-400">
+            <span>Nivel <b id="hud-level" class="text-blue-400">1</b></span>
+            <div class="w-24 bg-slate-800 h-2 rounded-full overflow-hidden border border-slate-700">
+              <div id="hud-xp-bar" class="bg-blue-500 h-full w-0 transition-all duration-300"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-6">
+        <!-- Monedas -->
+        <div class="flex items-center gap-2 bg-slate-800/80 px-4 py-1.5 rounded-full border border-amber-500/30">
+          <i data-lucide="coins" class="w-5 h-5 text-amber-400"></i>
+          <span id="hud-coins" class="font-bold text-amber-300 text-base">0</span>
+        </div>
+
+        <button onclick="showSection('settings')" class="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition border border-slate-700">
+          <i data-lucide="settings" class="w-5 h-5 text-slate-300"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- PANTALLAS DE INTERFAZ -->
+    <main class="relative w-full flex-1 flex items-center justify-center overflow-hidden">
+
+      <!-- 1. AUTH CON CORREO -->
+      <section id="sec-auth" class="glass-panel p-8 rounded-2xl w-full max-w-md shadow-2xl z-30 text-center">
+        <h1 class="text-4xl font-black italic tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-emerald-400 mb-2">
+          TURBO ARENA 2D
+        </h1>
+        <p class="text-slate-400 text-xs mb-6">Fútbol cenital competitivo con vehículos a gran velocidad</p>
+
+        <form id="auth-form" onsubmit="handleAuth(event)" class="space-y-4">
+          <div>
+            <label class="block text-left text-xs text-slate-400 mb-1">Nombre de Usuario</label>
+            <input type="text" id="auth-username" required maxlength="15" placeholder="Piloto123" 
+                   class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition">
+          </div>
+          <div>
+            <label class="block text-left text-xs text-slate-400 mb-1">Correo Electrónico</label>
+            <input type="email" id="auth-email" required placeholder="tuemail@ejemplo.com" 
+                   class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition">
+          </div>
+          <div>
+            <label class="block text-left text-xs text-slate-400 mb-1">Contraseña</label>
+            <input type="password" id="auth-password" required placeholder="••••••••" 
+                   class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 transition">
+          </div>
+          <button type="submit" class="w-full bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-500 hover:to-emerald-400 font-extrabold py-3 rounded-lg shadow-lg transition transform active:scale-95">
+            Entrar / Registrarse
+          </button>
+        </form>
+      </section>
+
+      <!-- 2. MENÚ PRINCIPAL -->
+      <section id="sec-menu" class="hidden flex flex-col items-center justify-center gap-4 z-20 w-full max-w-md px-4">
+        <h1 class="text-5xl font-black italic text-center tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-emerald-400 drop-shadow-md mb-2">
+          TURBO ARENA
+        </h1>
+        <span class="text-xs bg-blue-900/60 border border-blue-500/40 text-blue-300 px-3 py-1 rounded-full font-bold uppercase tracking-widest mb-3">Vista Cenital Top-Down</span>
+
+        <button onclick="showSection('mode-select')" class="w-full py-4 bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-500 hover:to-emerald-400 font-extrabold text-xl rounded-xl shadow-xl shadow-emerald-500/10 flex items-center justify-center gap-3 transition transform hover:-translate-y-0.5">
+          <i data-lucide="play" class="w-6 h-6 fill-current"></i> JUGAR PARTIDO
+        </button>
+
+        <div class="grid grid-cols-2 gap-3 w-full">
+          <button onclick="showSection('garage')" class="py-3 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+            <i data-lucide="car" class="w-5 h-5 text-blue-400"></i> Garaje
+          </button>
+          <button onclick="showSection('shop')" class="py-3 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+            <i data-lucide="shopping-bag" class="w-5 h-5 text-amber-400"></i> Tienda
+          </button>
+          <button onclick="showSection('code')" class="py-3 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+            <i data-lucide="ticket" class="w-5 h-5 text-purple-400"></i> Canjear Código
+          </button>
+          <button onclick="showSection('profile')" class="py-3 bg-slate-800/90 hover:bg-slate-700 border border-slate-700 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+            <i data-lucide="user" class="w-5 h-5 text-emerald-400"></i> Perfil
+          </button>
+        </div>
+
+        <button onclick="logout()" class="mt-2 text-xs text-rose-400 hover:underline flex items-center gap-1">
+          <i data-lucide="log-out" class="w-4 h-4"></i> Cerrar Sesión
+        </button>
+      </section>
+
+      <!-- 3. SELECCIÓN DE MODOS DE JUEGO -->
+      <section id="sec-mode-select" class="hidden glass-panel p-6 rounded-2xl w-full max-w-2xl z-20 space-y-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+          <h2 class="text-2xl font-black italic">Seleccionar Modo de Juego</h2>
+          <button onclick="showSection('menu')" class="px-3 py-1 bg-slate-800 rounded-lg text-xs hover:bg-slate-700">Volver</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+          <div onclick="selectGameMode('local_1v1')" class="p-4 bg-slate-900/90 border border-slate-800 hover:border-blue-500 rounded-xl cursor-pointer transition flex flex-col justify-between group">
+            <div>
+              <div class="flex items-center gap-2 text-blue-400 font-bold mb-1">
+                <i data-lucide="users" class="w-5 h-5"></i> 1v1 Local (Mismo Teclado)
+              </div>
+              <p class="text-xs text-slate-400">Enfréntate a un amigo en la misma pantalla. Jugador 1 (WASD + Shift) vs Jugador 2 (Flechas + Enter).</p>
+            </div>
+            <span class="mt-3 text-xs font-bold text-blue-400 group-hover:underline">Seleccionar ▶</span>
+          </div>
+
+          <div onclick="selectGameMode('bot_1v1')" class="p-4 bg-slate-900/90 border border-slate-800 hover:border-emerald-500 rounded-xl cursor-pointer transition flex flex-col justify-between group">
+            <div>
+              <div class="flex items-center gap-2 text-emerald-400 font-bold mb-1">
+                <i data-lucide="bot" class="w-5 h-5"></i> 1v1 contra Bot
+              </div>
+              <p class="text-xs text-slate-400">Duelo individual directo contra una inteligencia artificial configurable.</p>
+            </div>
+            <span class="mt-3 text-xs font-bold text-emerald-400 group-hover:underline">Seleccionar ▶</span>
+          </div>
+
+          <div onclick="selectGameMode('bot_2v2')" class="p-4 bg-slate-900/90 border border-slate-800 hover:border-amber-500 rounded-xl cursor-pointer transition flex flex-col justify-between group">
+            <div>
+              <div class="flex items-center gap-2 text-amber-400 font-bold mb-1">
+                <i data-lucide="users-round" class="w-5 h-5"></i> 2v2 Equipos con Bots
+              </div>
+              <p class="text-xs text-slate-400">Tú y un bot compañero contra una pareja de bots rivales con roles dinámicos.</p>
+            </div>
+            <span class="mt-3 text-xs font-bold text-amber-400 group-hover:underline">Seleccionar ▶</span>
+          </div>
+
+          <div onclick="selectGameMode('bot_3v3')" class="p-4 bg-slate-900/90 border border-slate-800 hover:border-purple-500 rounded-xl cursor-pointer transition flex flex-col justify-between group">
+            <div>
+              <div class="flex items-center gap-2 text-purple-400 font-bold mb-1">
+                <i data-lucide="shield-alert" class="w-5 h-5"></i> 3v3 Arena Completa
+              </div>
+              <p class="text-xs text-slate-400">Batalla multitudinaria de 6 coches con roles de Atacante, Defensor y Cobertura.</p>
+            </div>
+            <span class="mt-3 text-xs font-bold text-purple-400 group-hover:underline">Seleccionar ▶</span>
+          </div>
+
+          <div onclick="selectGameMode('online_1v1')" class="col-span-1 md:col-span-2 p-4 bg-gradient-to-r from-blue-950/80 to-indigo-950/80 border border-indigo-500/40 hover:border-indigo-400 rounded-xl cursor-pointer transition flex justify-between items-center group">
+            <div>
+              <div class="flex items-center gap-2 text-cyan-300 font-bold mb-1">
+                <i data-lucide="globe" class="w-5 h-5"></i> 1v1 Online Multijugador (Salas Reales)
+              </div>
+              <p class="text-xs text-slate-300">Conéctate con un rival real desde otro dispositivo/pestaña usando código de sala.</p>
+            </div>
+            <span class="text-xs font-bold text-cyan-400 group-hover:underline">Crear / Unirse a Sala ▶</span>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 4. AJUSTES DE PARTIDO & SALAS ONLINE -->
+      <section id="sec-match-opt" class="hidden glass-panel p-6 rounded-2xl w-full max-w-lg z-20 space-y-4">
+        <h2 id="match-opt-title" class="text-2xl font-bold text-center border-b border-slate-700 pb-3">Configurar Partido</h2>
+        
+        <div id="diff-selector-container">
+          <label class="block text-sm text-slate-300 mb-2">Dificultad de la IA</label>
+          <div class="grid grid-cols-3 gap-3">
+            <button type="button" onclick="setBotDifficulty('easy')" id="btn-diff-easy" class="diff-btn border border-slate-700 bg-slate-800 p-2.5 rounded-lg text-center font-bold text-xs hover:border-emerald-500 transition">Fácil</button>
+            <button type="button" onclick="setBotDifficulty('medium')" id="btn-diff-medium" class="diff-btn border border-blue-500 bg-blue-600/30 p-2.5 rounded-lg text-center font-bold text-xs hover:border-blue-500 transition">Medio</button>
+            <button type="button" onclick="setBotDifficulty('hard')" id="btn-diff-hard" class="diff-btn border border-slate-700 bg-slate-800 p-2.5 rounded-lg text-center font-bold text-xs hover:border-rose-500 transition">Pro</button>
+          </div>
+        </div>
+
+        <!-- Apartado Crear/Unirse a Sala Online Privada -->
+        <div id="online-room-container" class="hidden space-y-3 bg-slate-900/90 border border-cyan-500/30 p-4 rounded-xl">
+          <h3 class="text-sm font-bold text-cyan-300 flex items-center gap-1.5"><i data-lucide="key" class="w-4 h-4"></i> Sala Privada Online 1v1 Real</h3>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Nombre de la Sala</label>
+            <input type="text" id="room-name-input" placeholder="Ejemplo: SalaPro1" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Contraseña de la Sala</label>
+            <input type="password" id="room-pass-input" placeholder="••••" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500">
+          </div>
+          
+          <div class="flex gap-2 pt-1">
+            <button type="button" onclick="createRoom()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 font-bold text-xs rounded-lg transition">Crear Sala</button>
+            <button type="button" onclick="joinRoom()" class="flex-1 py-2 bg-cyan-600 hover:bg-cyan-500 font-bold text-xs rounded-lg transition">Unirse a Sala</button>
+          </div>
+          <div id="room-status" class="text-xs font-semibold text-center min-h-[18px]"></div>
+        </div>
+
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Estadio / Arena</label>
+          <select id="match-arena" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm focus:outline-none">
+            <option value="classic">Estadio Neón Clásico</option>
+            <option value="cyber">Cyber Arena Ciberpunk</option>
+            <option value="volcanic">Volcanic Pitch (Lava Nitrógena)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm text-slate-300 mb-2">Duración del Partido</label>
+          <select id="match-duration" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm focus:outline-none">
+            <option value="90">1:30 Minutos</option>
+            <option value="180" selected>3:00 Minutos</option>
+            <option value="300">5:00 Minutos</option>
+          </select>
+        </div>
+
+        <div class="flex gap-3 pt-2">
+          <button onclick="showSection('mode-select')" class="flex-1 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold text-sm transition">Atrás</button>
+          <button id="btn-launch-match" onclick="launchMatch()" class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold text-sm transition shadow-lg shadow-emerald-600/30">¡Saltar al Campo!</button>
+        </div>
+      </section>
+
+      <!-- 5. GARAJE -->
+      <section id="sec-garage" class="hidden glass-panel p-6 rounded-2xl w-full max-w-2xl z-20 flex flex-col h-[80vh]">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+          <h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="car" class="text-blue-400"></i> Garaje de Personalización</h2>
+          <button onclick="showSection('menu')" class="px-3 py-1 bg-slate-800 rounded-lg text-xs hover:bg-slate-700">Volver</button>
+        </div>
+
+        <!-- Previsualización Top-Down del Vehículo -->
+        <div class="my-4 bg-slate-900/90 rounded-xl border border-slate-800 p-6 flex flex-col items-center justify-center relative overflow-hidden h-44">
+          <canvas id="garage-car-canvas" width="160" height="90" class="border border-slate-800 rounded-lg bg-slate-950"></canvas>
+          <span class="text-xs text-slate-500 mt-2">Vista Cenital Detallada Equipada</span>
+        </div>
+
+        <!-- Grid de Items -->
+        <div id="garage-items-grid" class="grid grid-cols-3 gap-3 overflow-y-auto custom-scrollbar flex-1 pr-1">
+          <!-- Items -->
+        </div>
+      </section>
+
+      <!-- 6. TIENDA -->
+      <section id="sec-shop" class="hidden glass-panel p-6 rounded-2xl w-full max-w-3xl z-20 flex flex-col h-[85vh]">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+          <h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="shopping-bag" class="text-amber-400"></i> Tienda de Artículos Cosméticos</h2>
+          <button onclick="showSection('menu')" class="px-3 py-1 bg-slate-800 rounded-lg text-xs hover:bg-slate-700">Volver</button>
+        </div>
+
+        <div id="shop-items-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto custom-scrollbar flex-1 mt-4 pr-1">
+          <!-- Items generados -->
+        </div>
+      </section>
+
+      <!-- 7. CANJEAR CÓDIGO -->
+      <section id="sec-code" class="hidden glass-panel p-6 rounded-2xl w-full max-w-md z-20 text-center space-y-4">
+        <div class="w-12 h-12 bg-purple-600/20 text-purple-400 rounded-full flex items-center justify-center mx-auto border border-purple-500/30">
+          <i data-lucide="ticket" class="w-6 h-6"></i>
+        </div>
+        <h2 class="text-2xl font-bold">Canjear Código</h2>
+        <p class="text-xs text-slate-400">Usa el código oficial <b class="text-purple-300">Release</b> para obtener recompensas exclusivas.</p>
+
+        <div class="space-y-3">
+          <input type="text" id="code-input" placeholder="Ingresa tu código..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-center text-lg font-mono tracking-widest uppercase focus:outline-none focus:border-purple-500">
+          <button onclick="redeemCode()" class="w-full py-3 bg-purple-600 hover:bg-purple-500 font-bold rounded-lg transition shadow-lg shadow-purple-600/20">
+            Canjear Código
+          </button>
+        </div>
+
+        <div id="code-feedback" class="text-sm font-semibold min-h-[24px]"></div>
+
+        <button onclick="showSection('menu')" class="text-xs text-slate-400 hover:underline">Volver al Menú</button>
+      </section>
+
+      <!-- 8. PERFIL CON MUESTRA Y EDICIÓN DE CORREO -->
+      <section id="sec-profile" class="hidden glass-panel p-6 rounded-2xl w-full max-w-md z-20 space-y-4">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+          <h2 class="text-2xl font-bold flex items-center gap-2"><i data-lucide="user" class="text-emerald-400"></i> Estadísticas de Piloto</h2>
+          <button onclick="showSection('menu')" class="px-3 py-1 bg-slate-800 rounded-lg text-xs hover:bg-slate-700">Volver</button>
+        </div>
+
+        <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2">
+          <div class="flex justify-between items-center text-xs">
+            <span class="text-slate-400">Correo Vinculado:</span>
+            <b id="profile-email-display" class="text-slate-200">No especificado</b>
+          </div>
+          <div class="flex gap-2 pt-1">
+            <input type="email" id="profile-email-input" placeholder="Nuevo correo..." class="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none">
+            <button onclick="updateProfileEmail()" class="bg-emerald-600 hover:bg-emerald-500 px-3 py-1 rounded text-xs font-bold transition">Guardar</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-center">
+          <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-400 block">Partidos Jugados</span>
+            <b id="stat-matches" class="text-xl text-blue-400">0</b>
+          </div>
+          <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-400 block">Victorias</span>
+            <b id="stat-wins" class="text-xl text-emerald-400">0</b>
+          </div>
+          <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-400 block">Goles Totales</span>
+            <b id="stat-goals" class="text-xl text-amber-400">0</b>
+          </div>
+          <div class="bg-slate-800/60 p-3 rounded-xl border border-slate-700">
+            <span class="text-xs text-slate-400 block">Monedas Ganadas</span>
+            <b id="stat-coins" class="text-xl text-yellow-300">0</b>
+          </div>
+        </div>
+      </section>
+
+      <!-- 9. CONFIGURACIÓN -->
+      <section id="sec-settings" class="hidden glass-panel p-6 rounded-2xl w-full max-w-md z-20 space-y-4">
+        <h2 class="text-2xl font-bold border-b border-slate-700 pb-3">Configuración de Controles</h2>
+
+        <div class="space-y-3 text-xs">
+          <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+            <span>Jugador 1 (WASD)</span>
+            <span class="text-slate-400">W: Acelerar | S: Reversa | A/D: Giro | Shift: Turbo</span>
+          </div>
+          <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+            <span>Jugador 2 (Flechas)</span>
+            <span class="text-slate-400">▲: Acelerar | ▼: Reversa | ◀/▶: Giro | Enter: Turbo</span>
+          </div>
+          <div class="flex justify-between items-center pt-2">
+            <span class="text-sm">Efectos de Sonido (SFX)</span>
+            <input type="checkbox" id="setting-sfx" checked class="w-5 h-5 accent-blue-500">
+          </div>
+        </div>
+
+        <button onclick="showSection('menu')" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg font-bold">Guardar y Salir</button>
+      </section>
+
+      <!-- 10. PANTALLA DEL JUEGO TOP-DOWN -->
+      <div id="sec-game" class="hidden absolute inset-0 w-full h-full flex flex-col justify-between items-center z-10 bg-slate-950">
+        
+        <!-- MARCADOR TOP-DOWN -->
+        <div class="absolute top-3 z-20 bg-slate-900/85 border border-slate-800 backdrop-blur-md px-6 py-2 rounded-2xl flex items-center gap-8 shadow-2xl">
+          <div class="flex items-center gap-3">
+            <span id="match-p1-name" class="font-bold text-blue-400 text-sm">Equipo Azul</span>
+            <span id="match-p1-score" class="text-3xl font-black text-blue-400">0</span>
+          </div>
+          <div class="text-center">
+            <span id="match-timer" class="font-mono text-xl font-bold text-slate-200">03:00</span>
+            <span id="network-ping" class="block text-[10px] text-emerald-400 font-mono hidden">ONLINE 1v1 REAL</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="match-p2-score" class="text-3xl font-black text-rose-500">0</span>
+            <span id="match-p2-name" class="font-bold text-rose-500 text-sm">Equipo Rojo</span>
+          </div>
+        </div>
+
+        <!-- CANVAS DE VISTA CENITAL -->
+        <canvas id="gameCanvas" class="w-full h-full block bg-slate-950"></canvas>
+
+        <!-- BANNER DE CELEBRACIÓN DE GOL -->
+        <div id="match-banner" class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 text-center pointer-events-none w-full">
+          <div id="banner-box" class="inline-block px-12 py-6 rounded-3xl bg-slate-900/90 border-2 border-amber-500/80 backdrop-blur-xl shadow-[0_0_50px_rgba(245,158,11,0.5)] transform -translate-x-1/2 -translate-y-1/2 animate-goal-banner">
+            <h1 id="banner-text" class="text-6xl font-black italic tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-amber-400 to-yellow-500 drop-shadow-[0_5px_15px_rgba(245,158,11,0.8)]">
+              ¡GOLAZO!
+            </h1>
+            <p id="banner-subtext" class="text-sm font-bold tracking-wider text-slate-200 mt-2 uppercase">EQUIPO AZUL ANOTA</p>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- LÓGICA COMPLETA Y ARQUITECTURA -->
+  <script>
+    /* ==========================================
+       1. ESTADO DE USUARIO Y PERSISTENCIA LOCAL
+       ========================================== */
+    const DEFAULT_USER = {
+      username: "Piloto1",
+      email: "piloto1@turboarena.com",
+      coins: 600,
+      xp: 0,
+      level: 1,
+      equipped: {
+        skin: "skin_default",
+        wheels: "wheel_basic"
+      },
+      inventory: ["skin_default", "wheel_basic"],
+      usedCodes: [],
+      stats: {
+        matches: 0,
+        wins: 0,
+        goals: 0,
+        coinsEarned: 600
+      }
+    };
+
+    let currentUser = null;
+
+    function loadUserData() {
+      const saved = localStorage.getItem('turbo_arena_2d_topdown');
+      currentUser = saved ? JSON.parse(saved) : { ...DEFAULT_USER };
+      if (!currentUser.email) currentUser.email = "sin_correo@turboarena.com";
+      updateHUD();
+    }
+
+    function saveUserData() {
+      if (currentUser) {
+        localStorage.setItem('turbo_arena_2d_topdown', JSON.stringify(currentUser));
+        updateHUD();
+      }
+    }
+
+    function updateHUD() {
+      if (!currentUser) return;
+      document.getElementById('hud-username').innerText = currentUser.username;
+      document.getElementById('user-avatar').innerText = currentUser.username.charAt(0).toUpperCase();
+      document.getElementById('hud-coins').innerText = currentUser.coins;
+      document.getElementById('hud-level').innerText = currentUser.level;
+      
+      const xpNeeded = currentUser.level * 100;
+      const xpPercent = Math.min(100, (currentUser.xp / xpNeeded) * 100);
+      document.getElementById('hud-xp-bar').style.width = `${xpPercent}%`;
+
+      document.getElementById('stat-matches').innerText = currentUser.stats.matches;
+      document.getElementById('stat-wins').innerText = currentUser.stats.wins;
+      document.getElementById('stat-goals').innerText = currentUser.stats.goals;
+      document.getElementById('stat-coins').innerText = currentUser.stats.coinsEarned;
+
+      const profileEmailDisp = document.getElementById('profile-email-display');
+      if (profileEmailDisp) profileEmailDisp.innerText = currentUser.email || "No especificado";
+    }
+
+    function updateProfileEmail() {
+      const input = document.getElementById('profile-email-input');
+      const val = input.value.trim();
+      if (val && val.includes('@')) {
+        currentUser.email = val;
+        saveUserData();
+        input.value = '';
+        alert("¡Correo electrónico actualizado correctamente!");
+      } else {
+        alert("Por favor ingresa un correo electrónico válido.");
+      }
+    }
+
+    /* ==========================================
+       2. CATÁLOGO Y TIENDA
+       ========================================== */
+    const SHOP_ITEMS = [
+      { id: "skin_red", name: "Furia Roja", type: "skin", price: 200, color: "#ef4444" },
+      { id: "skin_emerald", name: "Rayo Esmeralda", type: "skin", price: 350, color: "#10b981" },
+      { id: "skin_purple", name: "Sombras Ciber", type: "skin", price: 500, color: "#8b5cf6" },
+      { id: "skin_rainbow", name: "Skin Arcoíris", type: "skin", price: 99999, special: true, animated: true },
+      { id: "wheel_sport", name: "Llantas Neón", type: "wheels", price: 150, color: "#e2e8f0" },
+      { id: "wheel_gold", name: "Llantas Doradas", type: "wheels", price: 600, color: "#fbbf24" }
+    ];
+
+    /* ==========================================
+       3. EFECTOS SONOROS (WEB AUDIO API)
+       ========================================== */
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new AudioContext();
+    }
+
+    function playSound(type) {
+      if (!document.getElementById('setting-sfx').checked) return;
+      if (!audioCtx) initAudio();
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      const now = audioCtx.currentTime;
+
+      if (type === 'hit') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(160, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.1);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } else if (type === 'turbo') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(250, now);
+        osc.frequency.linearRampToValueAtTime(550, now + 0.12);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.12);
+      } else if (type === 'goal') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.setValueAtTime(660, now + 0.12);
+        osc.frequency.setValueAtTime(880, now + 0.25);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.5);
+      }
+    }
+
+    /* ==========================================
+       4. NAVEGACIÓN Y VISTAS UI
+       ========================================== */
+    function showSection(sectionId) {
+      const sections = ['auth', 'menu', 'mode-select', 'match-opt', 'garage', 'shop', 'code', 'profile', 'settings', 'game'];
+      sections.forEach(s => {
+        const el = document.getElementById(`sec-${s}`);
+        if (el) el.classList.add('hidden');
+      });
+
+      const target = document.getElementById(`sec-${sectionId}`);
+      if (target) target.classList.remove('hidden');
+
+      if (sectionId === 'shop') renderShop();
+      if (sectionId === 'garage') renderGarage();
+    }
+
+    function handleAuth(e) {
+      e.preventDefault();
+      initAudio();
+      const userVal = document.getElementById('auth-username').value.trim();
+      const emailVal = document.getElementById('auth-email').value.trim();
+
+      if (userVal) {
+        currentUser.username = userVal;
+        if (emailVal) currentUser.email = emailVal;
+        saveUserData();
+        showSection('menu');
+      }
+    }
+
+    function logout() {
+      showSection('auth');
+    }
+
+    /* ==========================================
+       5. CÓDIGOS PROMOCIONALES
+       ========================================== */
+    function redeemCode() {
+      const input = document.getElementById('code-input');
+      const feedback = document.getElementById('code-feedback');
+      const code = input.value.trim();
+
+      if (!code) return;
+
+      if (code.toLowerCase() === 'release') {
+        if (currentUser.usedCodes.includes('Release')) {
+          feedback.innerText = "⚠️ Este código ya ha sido canjeado previamente.";
+          feedback.className = "text-sm font-semibold text-amber-400";
+        } else {
+          currentUser.usedCodes.push('Release');
+          
+          if (!currentUser.inventory.includes('skin_rainbow')) {
+            currentUser.inventory.push('skin_rainbow');
+          }
+          
+          currentUser.equipped.skin = 'skin_rainbow';
+          saveUserData();
+
+          feedback.innerText = "¡CÓDIGO CORRECTO! Has desbloqueado la Skin Arcoíris 🌈";
+          feedback.className = "text-sm font-semibold text-emerald-400";
+          playSound('goal');
+        }
+      } else {
+        feedback.innerText = "❌ Código no existente o no válido.";
+        feedback.className = "text-sm font-semibold text-rose-400";
+      }
+
+      input.value = '';
+    }
+
+    /* ==========================================
+       6. TIENDA Y GARAJE
+       ========================================== */
+    function renderShop() {
+      const grid = document.getElementById('shop-items-grid');
+      grid.innerHTML = '';
+
+      SHOP_ITEMS.forEach(item => {
+        const owned = currentUser.inventory.includes(item.id);
+        const card = document.createElement('div');
+        card.className = "bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-col justify-between items-center text-center relative overflow-hidden";
+
+        let previewHTML = '';
+        if (item.animated) {
+          previewHTML = `<div class="w-16 h-8 rounded-md rainbow-skin border border-white/20 mb-2"></div>`;
+        } else if (item.color) {
+          previewHTML = `<div class="w-16 h-8 rounded-md mb-2" style="background-color: ${item.color}"></div>`;
+        }
+
+        card.innerHTML = `
+          ${previewHTML}
+          <h4 class="font-bold text-sm text-slate-200">${item.name}</h4>
+          <span class="text-[10px] text-slate-400 mb-3">${item.type.toUpperCase()}</span>
+          
+          ${owned 
+            ? `<span class="text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-800 px-3 py-1 rounded-full">Comprado</span>`
+            : `<button onclick="buyItem('${item.id}')" class="w-full py-1.5 bg-amber-500 hover:bg-amber-400 font-bold text-xs text-slate-950 rounded-lg flex items-center justify-center gap-1">
+                 <i data-lucide="coins" class="w-4 h-4"></i> ${item.price}
+               </button>`
+          }
+        `;
+        grid.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    function buyItem(itemId) {
+      const item = SHOP_ITEMS.find(i => i.id === itemId);
+      if (!item) return;
+
+      if (currentUser.coins >= item.price) {
+        currentUser.coins -= item.price;
+        currentUser.inventory.push(item.id);
+        saveUserData();
+        renderShop();
+        playSound('goal');
+      } else {
+        alert("¡No tienes suficientes monedas!");
+      }
+    }
+
+    function renderGarage() {
+      const grid = document.getElementById('garage-items-grid');
+      grid.innerHTML = '';
+
+      const canvasG = document.getElementById('garage-car-canvas');
+      const ctxG = canvasG.getContext('2d');
+      ctxG.clearRect(0, 0, canvasG.width, canvasG.height);
+
+      const skinObj = SHOP_ITEMS.find(i => i.id === currentUser.equipped.skin) || { color: '#3b82f6' };
+      
+      const previewCar = {
+        x: canvasG.width / 2,
+        y: canvasG.height / 2,
+        angle: 0,
+        w: 48,
+        h: 26,
+        color: skinObj.color || '#3b82f6',
+        skin: currentUser.equipped.skin,
+        speed: 0
+      };
+
+      drawDetailedCar(ctxG, previewCar);
+
+      const userItems = SHOP_ITEMS.filter(i => currentUser.inventory.includes(i.id));
+
+      userItems.forEach(item => {
+        const isEquipped = currentUser.equipped[item.type] === item.id;
+        const itemCard = document.createElement('div');
+        itemCard.className = `p-3 bg-slate-900 border ${isEquipped ? 'border-blue-500' : 'border-slate-800'} rounded-lg flex flex-col items-center justify-between cursor-pointer`;
+        
+        itemCard.innerHTML = `
+          <span class="text-xs font-bold">${item.name}</span>
+          <button onclick="equipItem('${item.type}', '${item.id}')" class="mt-2 text-xs px-3 py-1 rounded ${isEquipped ? 'bg-emerald-600 text-white' : 'bg-slate-800 hover:bg-slate-700'}">
+            ${isEquipped ? 'Equipado' : 'Equipar'}
+          </button>
+        `;
+        grid.appendChild(itemCard);
+      });
+    }
+
+    function equipItem(type, id) {
+      currentUser.equipped[type] = id;
+      saveUserData();
+      renderGarage();
+    }
+
+    /* ==========================================
+       7. MULTIJUGADOR ONLINE REAL (DISPOSITIVOS / PESTAÑAS DISTINTAS)
+       ========================================== */
+    let peer = null;
+    let netConn = null;
+    let broadcastChannel = null;
+    let isHost = false;
+    let onlineRivalName = "Rival_Online";
+
+    function sanitizeRoomId(roomName, roomPass) {
+      return "ta2d_" + roomName.toLowerCase().replace(/[^a-z0-9]/g, '') + "_" + roomPass.toLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+
+    function initNetworkHandlers(conn) {
+      netConn = conn;
+      netConn.on('data', (data) => handleNetworkMessage(data));
+      netConn.on('close', () => {
+        console.log("Conexión online finalizada.");
+      });
+    }
+
+    function sendNetworkData(data) {
+      if (netConn && netConn.open) {
+        netConn.send(data);
+      }
+      if (broadcastChannel) {
+        broadcastChannel.postMessage(data);
+      }
+    }
+
+    function handleNetworkMessage(data) {
+      if (!data || !data.type) return;
+
+      if (data.type === 'JOIN_ROOM') {
+        onlineRivalName = data.username || "Rival_Online";
+        sendNetworkData({ type: 'ROOM_ACCEPTED', hostName: currentUser.username });
+        const statusEl = document.getElementById('room-status');
+        if (statusEl) {
+          statusEl.innerText = `¡${onlineRivalName} se ha unido a la sala! Iniciando partido...`;
+          statusEl.className = "text-xs font-semibold text-center text-emerald-400";
+        }
+        setTimeout(() => {
+          launchMatch();
+        }, 1200);
+      }
+      else if (data.type === 'ROOM_ACCEPTED') {
+        onlineRivalName = data.hostName || "Host_Online";
+        const statusEl = document.getElementById('room-status');
+        if (statusEl) {
+          statusEl.innerText = `¡Unido con éxito a la sala de ${onlineRivalName}! Entrando al campo...`;
+          statusEl.className = "text-xs font-semibold text-center text-emerald-400";
+        }
+        setTimeout(() => {
+          launchMatch();
+        }, 1000);
+      }
+      else if (data.type === 'SYNC_GAME_STATE' && selectedMode === 'online_1v1' && !isHost) {
+        // El Cliente recibe la sincronización física del Host
+        if (ball && data.ball) {
+          ball.x = data.ball.x;
+          ball.y = data.ball.y;
+          ball.vx = data.ball.vx;
+          ball.vy = data.ball.vy;
+        }
+        if (cars[0] && data.car1) { // Vehículo del Host (Coche 1)
+          cars[0].x = data.car1.x;
+          cars[0].y = data.car1.y;
+          cars[0].angle = data.car1.angle;
+          cars[0].speed = data.car1.speed;
+          cars[0].boost = data.car1.boost;
+          cars[0].isBraking = data.car1.isBraking;
+        }
+        if (data.score1 !== undefined) {
+          scoreTeam1 = data.score1;
+          document.getElementById('match-p1-score').innerText = scoreTeam1;
+        }
+        if (data.score2 !== undefined) {
+          scoreTeam2 = data.score2;
+          document.getElementById('match-p2-score').innerText = scoreTeam2;
+        }
+        if (data.time !== undefined) matchTime = data.time;
+        if (data.isGoalPaused !== undefined) isGoalPaused = data.isGoalPaused;
+      }
+      else if (data.type === 'CLIENT_CAR_STATE' && selectedMode === 'online_1v1' && isHost) {
+        // El Host recibe el estado del coche del Cliente (Coche 2)
+        if (cars[1] && data.car2) {
+          cars[1].x = data.car2.x;
+          cars[1].y = data.car2.y;
+          cars[1].angle = data.car2.angle;
+          cars[1].speed = data.car2.speed;
+          cars[1].boost = data.car2.boost;
+          cars[1].isBraking = data.car2.isBraking;
+        }
+      }
+    }
+
+    function createRoom() {
+      const name = document.getElementById('room-name-input').value.trim();
+      const pass = document.getElementById('room-pass-input').value.trim();
+      const statusEl = document.getElementById('room-status');
+
+      if (!name || !pass) {
+        statusEl.innerText = "⚠️ Ingresa un nombre y contraseña de sala.";
+        statusEl.className = "text-xs font-semibold text-center text-amber-400";
+        return;
+      }
+
+      isHost = true;
+      const roomId = sanitizeRoomId(name, pass);
+
+      statusEl.innerText = `⏳ Creando sala privada "${name}"... Espere rival.`;
+      statusEl.className = "text-xs font-semibold text-center text-cyan-400 animate-pulse";
+
+      if (broadcastChannel) broadcastChannel.close();
+      broadcastChannel = new BroadcastChannel("room_channel_" + roomId);
+      broadcastChannel.onmessage = (event) => handleNetworkMessage(event.data);
+
+      if (peer) peer.destroy();
+
+      try {
+        peer = new Peer(roomId);
+
+        peer.on('open', (id) => {
+          statusEl.innerText = `⏳ Sala "${name}" creada. Esperando conexión del rival...`;
+          statusEl.className = "text-xs font-semibold text-center text-cyan-400 animate-pulse";
+        });
+
+        peer.on('connection', (conn) => {
+          initNetworkHandlers(conn);
+        });
+
+        peer.on('error', (err) => {
+          if (err.type === 'unavailable-id') {
+            statusEl.innerText = "⚠️ La sala ya existe. Haz clic en 'Unirse a Sala' o cambia el nombre.";
+            statusEl.className = "text-xs font-semibold text-center text-amber-400";
+          } else {
+            statusEl.innerText = "⚠️ Esperando rival en red local / online...";
+            statusEl.className = "text-xs font-semibold text-center text-cyan-400";
+          }
+        });
+      } catch(e) {
+        console.error("PeerJS Error:", e);
+      }
+    }
+
+    function joinRoom() {
+      const name = document.getElementById('room-name-input').value.trim();
+      const pass = document.getElementById('room-pass-input').value.trim();
+      const statusEl = document.getElementById('room-status');
+
+      if (!name || !pass) {
+        statusEl.innerText = "⚠️ Ingresa el nombre y la contraseña para buscar la sala.";
+        statusEl.className = "text-xs font-semibold text-center text-amber-400";
+        return;
+      }
+
+      isHost = false;
+      const roomId = sanitizeRoomId(name, pass);
+
+      statusEl.innerText = `🔍 Conectando a sala real "${name}"...`;
+      statusEl.className = "text-xs font-semibold text-center text-cyan-400 animate-pulse";
+
+      if (broadcastChannel) broadcastChannel.close();
+      broadcastChannel = new BroadcastChannel("room_channel_" + roomId);
+      broadcastChannel.onmessage = (event) => handleNetworkMessage(event.data);
+      broadcastChannel.postMessage({ type: 'JOIN_ROOM', username: currentUser.username });
+
+      if (peer) peer.destroy();
+
+      try {
+        peer = new Peer();
+
+        peer.on('open', () => {
+          const conn = peer.connect(roomId);
+          initNetworkHandlers(conn);
+          conn.on('open', () => {
+            sendNetworkData({ type: 'JOIN_ROOM', username: currentUser.username });
+          });
+        });
+
+        peer.on('error', (err) => {
+          console.warn("PeerJS Join Warning:", err);
+        });
+      } catch(e) {
+        console.error("PeerJS Join Error:", e);
+      }
+    }
+
+    /* ==========================================
+       8. MOTOR DEL JUEGO TOP-DOWN DETALLADO
+       ========================================== */
+    let canvas, ctx;
+    let gameLoopReq = null;
+    let selectedMode = 'bot_1v1';
+    let botDifficulty = 'medium';
+
+    function setBotDifficulty(diff) {
+      botDifficulty = diff;
+      document.querySelectorAll('.diff-btn').forEach(b => {
+        b.classList.remove('border-blue-500', 'bg-blue-600/30', 'border-emerald-500', 'border-rose-500');
+        b.classList.add('border-slate-700', 'bg-slate-800');
+      });
+
+      const activeBtn = document.getElementById(`btn-diff-${diff}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('border-slate-700', 'bg-slate-800');
+        activeBtn.classList.add('border-blue-500', 'bg-blue-600/30');
+      }
+    }
+
+    function selectGameMode(mode) {
+      selectedMode = mode;
+      
+      const pingEl = document.getElementById('network-ping');
+      const roomContainer = document.getElementById('online-room-container');
+      const diffContainer = document.getElementById('diff-selector-container');
+      const btnLaunch = document.getElementById('btn-launch-match');
+
+      if (mode === 'online_1v1') {
+        pingEl.classList.remove('hidden');
+        roomContainer.classList.remove('hidden');
+        diffContainer.classList.add('hidden');
+        btnLaunch.classList.add('hidden');
+        document.getElementById('match-opt-title').innerText = "Crear o Unirse a Sala Online";
+      } else {
+        pingEl.classList.add('hidden');
+        roomContainer.classList.add('hidden');
+        diffContainer.classList.remove('hidden');
+        btnLaunch.classList.remove('hidden');
+        document.getElementById('match-opt-title').innerText = "Configurar Partido";
+      }
+
+      showSection('match-opt');
+    }
+
+    function launchMatch() {
+      showSection('game');
+      initTopDownMatch();
+    }
+
+    // OBJETOS, FÍSICAS Y PARTÍCULAS
+    let cars = [];
+    let ball = null;
+    let particles = [];
+    let skidmarks = [];
+    let goalShockwaves = [];
+    let scoreTeam1 = 0, scoreTeam2 = 0;
+    let matchTime = 180;
+    let matchTimerInterval = null;
+    let isGoalPaused = false;
+
+    // Control Teclado
+    const keys = {
+      w: false, s: false, a: false, d: false, shift: false,
+      ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false, Enter: false
+    };
+
+    function initTopDownMatch() {
+      canvas = document.getElementById('gameCanvas');
+      ctx = canvas.getContext('2d');
+
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      window.onkeydown = (e) => { if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) setKey(e, true); };
+      window.onkeyup = (e) => { if (keys.hasOwnProperty(e.key) || keys.hasOwnProperty(e.code)) setKey(e, false); };
+
+      scoreTeam1 = 0;
+      scoreTeam2 = 0;
+      particles = [];
+      skidmarks = [];
+      goalShockwaves = [];
+      matchTime = parseInt(document.getElementById('match-duration').value);
+
+      document.getElementById('match-p1-score').innerText = '0';
+      document.getElementById('match-p2-score').innerText = '0';
+
+      setupTeamsAndEntities();
+
+      if (matchTimerInterval) clearInterval(matchTimerInterval);
+      matchTimerInterval = setInterval(() => {
+        if (!isGoalPaused) {
+          matchTime--;
+          updateTimerDisplay();
+          if (matchTime <= 0) endMatch();
+        }
+      }, 1000);
+
+      if (gameLoopReq) cancelAnimationFrame(gameLoopReq);
+      topDownGameLoop();
+    }
+
+    function setKey(e, isPressed) {
+      if (e.key === 'Shift' || e.code === 'ShiftLeft') keys.shift = isPressed;
+      else if (keys.hasOwnProperty(e.key)) keys[e.key] = isPressed;
+    }
+
+    function resizeCanvas() {
+      canvas.width = canvas.parentElement.clientWidth;
+      canvas.height = canvas.parentElement.clientHeight;
+    }
+
+    function updateTimerDisplay() {
+      const mins = Math.floor(matchTime / 60).toString().padStart(2, '0');
+      const secs = (matchTime % 60).toString().padStart(2, '0');
+      document.getElementById('match-timer').innerText = `${mins}:${secs}`;
+    }
+
+    function setupTeamsAndEntities() {
+      cars = [];
+      const arenaWidth = canvas.width;
+      const arenaHeight = canvas.height;
+
+      ball = {
+        x: arenaWidth / 2,
+        y: arenaHeight / 2,
+        vx: 0,
+        vy: 0,
+        r: 15
+      };
+
+      if (selectedMode === 'local_1v1') {
+        document.getElementById('match-p1-name').innerText = `${currentUser.username} (P1)`;
+        document.getElementById('match-p2-name').innerText = "Jugador 2 (Local)";
+
+        cars.push(createCar(1, arenaWidth * 0.2, arenaHeight / 2, 0, '#3b82f6', 'human_p1'));
+        cars.push(createCar(2, arenaWidth * 0.8, arenaHeight / 2, Math.PI, '#f43f5e', 'human_p2'));
+      } 
+      else if (selectedMode === 'bot_1v1') {
+        document.getElementById('match-p1-name').innerText = currentUser.username;
+        document.getElementById('match-p2-name').innerText = `Bot (${botDifficulty.toUpperCase()})`;
+
+        cars.push(createCar(1, arenaWidth * 0.2, arenaHeight / 2, 0, '#3b82f6', 'human_p1'));
+        cars.push(createCar(2, arenaWidth * 0.8, arenaHeight / 2, Math.PI, '#f43f5e', 'bot', 'attacker'));
+      } 
+      else if (selectedMode === 'bot_2v2') {
+        document.getElementById('match-p1-name').innerText = "Equipo Azul (2)";
+        document.getElementById('match-p2-name').innerText = "Equipo Rojo (2)";
+
+        cars.push(createCar(1, arenaWidth * 0.2, arenaHeight * 0.35, 0, '#3b82f6', 'human_p1'));
+        cars.push(createCar(1, arenaWidth * 0.2, arenaHeight * 0.65, 0, '#2563eb', 'bot', 'defender'));
+
+        cars.push(createCar(2, arenaWidth * 0.8, arenaHeight * 0.35, Math.PI, '#f43f5e', 'bot', 'attacker'));
+        cars.push(createCar(2, arenaWidth * 0.8, arenaHeight * 0.65, Math.PI, '#e11d48', 'bot', 'defender'));
+      } 
+      else if (selectedMode === 'bot_3v3') {
+        document.getElementById('match-p1-name').innerText = "Equipo Azul (3)";
+        document.getElementById('match-p2-name').innerText = "Equipo Rojo (3)";
+
+        cars.push(createCar(1, arenaWidth * 0.25, arenaHeight * 0.5, 0, '#3b82f6', 'human_p1'));
+        cars.push(createCar(1, arenaWidth * 0.15, arenaHeight * 0.25, 0, '#2563eb', 'bot', 'attacker'));
+        cars.push(createCar(1, arenaWidth * 0.15, arenaHeight * 0.75, 0, '#1d4ed8', 'bot', 'defender'));
+
+        cars.push(createCar(2, arenaWidth * 0.75, arenaHeight * 0.5, Math.PI, '#f43f5e', 'bot', 'attacker'));
+        cars.push(createCar(2, arenaWidth * 0.85, arenaHeight * 0.25, Math.PI, '#e11d48', 'bot', 'balanced'));
+        cars.push(createCar(2, arenaWidth * 0.85, arenaHeight * 0.75, Math.PI, '#be123c', 'bot', 'defender'));
+      }
+      else if (selectedMode === 'online_1v1') {
+        const p1Name = isHost ? currentUser.username : onlineRivalName;
+        const p2Name = !isHost ? currentUser.username : onlineRivalName;
+
+        document.getElementById('match-p1-name').innerText = p1Name;
+        document.getElementById('match-p2-name').innerText = p2Name;
+
+        // Configuración Multijugador Real: Cada jugador controla ÚNICAMENTE su coche
+        const car1Type = isHost ? 'online_self' : 'online_remote';
+        const car2Type = !isHost ? 'online_self' : 'online_remote';
+
+        cars.push(createCar(1, arenaWidth * 0.2, arenaHeight / 2, 0, '#3b82f6', car1Type));
+        cars.push(createCar(2, arenaWidth * 0.8, arenaHeight / 2, Math.PI, '#f43f5e', car2Type));
+      }
+    }
+
+    function createCar(team, x, y, angle, color, controlType, role = 'balanced') {
+      return {
+        team,
+        x,
+        y,
+        angle,
+        speed: 0,
+        maxSpeed: 6.8,
+        accel: 0.28,
+        turnSpeed: 0.068,
+        w: 46,
+        h: 24,
+        boost: 100,
+        color,
+        controlType,
+        role,
+        isBraking: false,
+        skin: team === 1 ? currentUser.equipped.skin : 'skin_default'
+      };
+    }
+
+    /* SISTEMA DE PARTÍCULAS */
+    function spawnParticle(x, y, vx, vy, color, life = 20, size = 3) {
+      particles.push({ x, y, vx, vy, color, maxLife: life, life, size });
+    }
+
+    function createSparks(x, y, count = 8) {
+      for (let i = 0; i < count; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 2 + Math.random() * 4;
+        spawnParticle(x, y, Math.cos(ang) * spd, Math.sin(ang) * spd, '#fbbf24', 15 + Math.random() * 10, 2);
+      }
+    }
+
+    /* ==========================================
+       9. LOOP Y FÍSICAS AVANZADAS 2D
+       ========================================== */
+    function topDownGameLoop() {
+      updateTopDownPhysics();
+      renderTopDownFrame();
+      gameLoopReq = requestAnimationFrame(topDownGameLoop);
+    }
+
+    function updateTopDownPhysics() {
+      if (isGoalPaused) {
+        updateParticles();
+        return;
+      }
+
+      const friction = 0.965;
+      const arenaW = canvas.width;
+      const arenaH = canvas.height;
+      
+      const goalHeight = 160;
+      const goalTop = (arenaH - goalHeight) / 2;
+      const goalBottom = goalTop + goalHeight;
+
+      const lineLeft = 15;
+      const lineRight = arenaW - 15;
+
+      cars.forEach((car, index) => {
+        let isBoosting = false;
+        car.isBraking = false;
+
+        // CONTROLES LOCALES 1v1 Y MODOS OFFLINE
+        if (car.controlType === 'human_p1') {
+          if (keys.w) car.speed = Math.min(car.speed + car.accel, car.maxSpeed);
+          if (keys.s) {
+            car.speed = Math.max(car.speed - car.accel, -car.maxSpeed * 0.5);
+            car.isBraking = true;
+          }
+
+          const isReversing1 = keys.s || car.speed < 0;
+          if (keys.a) car.angle += isReversing1 ? car.turnSpeed : -car.turnSpeed;
+          if (keys.d) car.angle += isReversing1 ? -car.turnSpeed : car.turnSpeed;
+
+          if (keys.shift && car.boost > 0) {
+            isBoosting = true;
+            car.speed = Math.min(car.speed + 0.45, car.maxSpeed * 1.55);
+            car.boost = Math.max(0, car.boost - 0.7);
+            playSound('turbo');
+          }
+        } 
+        else if (car.controlType === 'human_p2') {
+          if (keys.ArrowUp) car.speed = Math.min(car.speed + car.accel, car.maxSpeed);
+          if (keys.ArrowDown) {
+            car.speed = Math.max(car.speed - car.accel, -car.maxSpeed * 0.5);
+            car.isBraking = true;
+          }
+
+          const isReversing2 = keys.ArrowDown || car.speed < 0;
+          if (keys.ArrowLeft) car.angle += isReversing2 ? car.turnSpeed : -car.turnSpeed;
+          if (keys.ArrowRight) car.angle += isReversing2 ? -car.turnSpeed : car.turnSpeed;
+
+          if (keys.Enter && car.boost > 0) {
+            isBoosting = true;
+            car.speed = Math.min(car.speed + 0.45, car.maxSpeed * 1.55);
+            car.boost = Math.max(0, car.boost - 0.7);
+            playSound('turbo');
+          }
+        }
+        // CONTROL EXCLUSIVO DEL JUGADOR PROPIO EN MODO ONLINE
+        else if (car.controlType === 'online_self') {
+          const moveUp = keys.w || keys.ArrowUp;
+          const moveDown = keys.s || keys.ArrowDown;
+          const moveLeft = keys.a || keys.ArrowLeft;
+          const moveRight = keys.d || keys.ArrowRight;
+          const useTurbo = keys.shift || keys.Enter;
+
+          if (moveUp) car.speed = Math.min(car.speed + car.accel, car.maxSpeed);
+          if (moveDown) {
+            car.speed = Math.max(car.speed - car.accel, -car.maxSpeed * 0.5);
+            car.isBraking = true;
+          }
+
+          const isReversingNet = moveDown || car.speed < 0;
+          if (moveLeft) car.angle += isReversingNet ? car.turnSpeed : -car.turnSpeed;
+          if (moveRight) car.angle += isReversingNet ? -car.turnSpeed : car.turnSpeed;
+
+          if (useTurbo && car.boost > 0) {
+            isBoosting = true;
+            car.speed = Math.min(car.speed + 0.45, car.maxSpeed * 1.55);
+            car.boost = Math.max(0, car.boost - 0.7);
+            playSound('turbo');
+          }
+        }
+        // JUGADOR RIVAL ONLINE: Controlado exclusivamente por sincronización de red
+        else if (car.controlType === 'online_remote') {
+          // No se aplican teclas locales del teclado sobre el vehículo del rival
+        }
+        else if (car.controlType === 'bot') {
+          updateBotAI(car, arenaW, arenaH, goalTop, goalBottom);
+        }
+
+        if (!isBoosting && car.boost < 100) car.boost = Math.min(100, car.boost + 0.12);
+        car.speed *= friction;
+
+        const backX = car.x - Math.cos(car.angle) * (car.w / 2);
+        const backY = car.y - Math.sin(car.angle) * (car.w / 2);
+
+        if (isBoosting) {
+          spawnParticle(backX, backY, -Math.cos(car.angle) * 3 + (Math.random() - 0.5), -Math.sin(car.angle) * 3 + (Math.random() - 0.5), '#06b6d4', 20, 5);
+          spawnParticle(backX, backY, -Math.cos(car.angle) * 2, -Math.sin(car.angle) * 2, '#3b82f6', 15, 3);
+        }
+
+        if (Math.abs(car.speed) > 3.5 && (keys.a || keys.d || keys.ArrowLeft || keys.ArrowRight)) {
+          spawnParticle(backX, backY, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.5, 'rgba(255,255,255,0.25)', 12, 3);
+          if (skidmarks.length > 200) skidmarks.shift();
+          skidmarks.push({ x: backX, y: backY, alpha: 0.4 });
+        }
+
+        car.x += Math.cos(car.angle) * car.speed;
+        car.y += Math.sin(car.angle) * car.speed;
+
+        car.x = Math.max(lineLeft + car.w / 2, Math.min(lineRight - car.w / 2, car.x));
+        car.y = Math.max(15 + car.h / 2, Math.min(arenaH - 15 - car.h / 2, car.y));
+
+        // Colisión Coche vs Coche
+        for (let j = index + 1; j < cars.length; j++) {
+          const other = cars[j];
+          const cdx = other.x - car.x;
+          const cdy = other.y - car.y;
+          const cdist = Math.sqrt(cdx * cdx + cdy * cdy);
+          const minDist = (car.w + other.w) / 2.2;
+
+          if (cdist < minDist) {
+            const overlap = minDist - cdist;
+            const nx = cdx / cdist;
+            const ny = cdy / cdist;
+
+            car.x -= nx * overlap * 0.5;
+            car.y -= ny * overlap * 0.5;
+            other.x += nx * overlap * 0.5;
+            other.y += ny * overlap * 0.5;
+
+            const tempSpd = car.speed;
+            car.speed = other.speed * 0.6;
+            other.speed = tempSpd * 0.6;
+
+            createSparks((car.x + other.x) / 2, (car.y + other.y) / 2, 6);
+            playSound('hit');
+          }
+        }
+
+        // Colisión Coche vs Pelota
+        const dx = ball.x - car.x;
+        const dy = ball.y - car.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < ball.r + car.w / 2) {
+          const hitAngle = Math.atan2(dy, dx);
+          const pushForce = Math.max(5, Math.abs(car.speed) * 1.8);
+          ball.vx = Math.cos(hitAngle) * pushForce;
+          ball.vy = Math.sin(hitAngle) * pushForce;
+          
+          createSparks(ball.x - Math.cos(hitAngle) * ball.r, ball.y - Math.sin(hitAngle) * ball.r, 8);
+          playSound('hit');
+        }
+      });
+
+      // SINCRONIZACIÓN RED EN TIEMPO REAL
+      if (selectedMode === 'online_1v1') {
+        if (isHost && cars[0] && cars[1] && ball) {
+          // El Anfitrión (Host) envía el estado físico completo al cliente
+          sendNetworkData({
+            type: 'SYNC_GAME_STATE',
+            ball: { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy },
+            car1: { x: cars[0].x, y: cars[0].y, angle: cars[0].angle, speed: cars[0].speed, boost: cars[0].boost, isBraking: cars[0].isBraking },
+            car2: { x: cars[1].x, y: cars[1].y, angle: cars[1].angle, speed: cars[1].speed, boost: cars[1].boost, isBraking: cars[1].isBraking },
+            score1: scoreTeam1,
+            score2: scoreTeam2,
+            time: matchTime,
+            isGoalPaused: isGoalPaused
+          });
+        } else if (!isHost && cars[1]) {
+          // El Cliente envía la posición y estado de su propio coche (Coche 2) al Anfitrión
+          sendNetworkData({
+            type: 'CLIENT_CAR_STATE',
+            car2: { x: cars[1].x, y: cars[1].y, angle: cars[1].angle, speed: cars[1].speed, boost: cars[1].boost, isBraking: cars[1].isBraking }
+          });
+        }
+      }
+
+      ball.vx *= 0.982;
+      ball.vy *= 0.982;
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      if (ball.y - ball.r <= 15) {
+        ball.y = 15 + ball.r;
+        ball.vy = -ball.vy * 0.8;
+      }
+      if (ball.y + ball.r >= arenaH - 15) {
+        ball.y = arenaH - 15 - ball.r;
+        ball.vy = -ball.vy * 0.8;
+      }
+
+      const isVerticalInGoal = (ball.y - ball.r >= goalTop) && (ball.y + ball.r <= goalBottom);
+
+      if (isVerticalInGoal) {
+        if (ball.x + ball.r < lineLeft) {
+          triggerGoal(2, lineLeft, ball.y);
+        }
+      } else {
+        if (ball.x - ball.r <= lineLeft) {
+          ball.x = lineLeft + ball.r;
+          ball.vx = -ball.vx * 0.8;
+          createSparks(ball.x, ball.y, 4);
+        }
+      }
+
+      if (isVerticalInGoal) {
+        if (ball.x - ball.r > lineRight) {
+          triggerGoal(1, lineRight, ball.y);
+        }
+      } else {
+        if (ball.x + ball.r >= lineRight) {
+          ball.x = lineRight - ball.r;
+          ball.vx = -ball.vx * 0.8;
+          createSparks(ball.x, ball.y, 4);
+        }
+      }
+
+      updateParticles();
+    }
+
+    function updateParticles() {
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+
+      for (let i = goalShockwaves.length - 1; i >= 0; i--) {
+        const sw = goalShockwaves[i];
+        sw.r += 8;
+        sw.alpha -= 0.03;
+        if (sw.alpha <= 0) goalShockwaves.splice(i, 1);
+      }
+    }
+
+    /* IA BOTS */
+    function updateBotAI(botCar, arenaW, arenaH, goalTop, goalBottom) {
+      let targetX = ball.x;
+      let targetY = ball.y;
+
+      const isTeam1 = botCar.team === 1;
+      const enemyGoalX = isTeam1 ? arenaW : 0;
+      const enemyGoalY = (goalTop + goalBottom) / 2;
+
+      let diffSpeedFactor = 0.85;
+      let diffTurnFactor = 0.06;
+
+      if (botDifficulty === 'easy') {
+        diffSpeedFactor = 0.65;
+        diffTurnFactor = 0.045;
+      } else if (botDifficulty === 'hard') {
+        diffSpeedFactor = 1.25;
+        diffTurnFactor = 0.09;
+      }
+
+      targetX += ball.vx * 5;
+      targetY += ball.vy * 5;
+
+      if (botCar.role === 'defender') {
+        const defenseLineX = isTeam1 ? arenaW * 0.15 : arenaW * 0.85;
+        if ((isTeam1 && ball.x > arenaW * 0.4) || (!isTeam1 && ball.x < arenaW * 0.6)) {
+          targetX = defenseLineX;
+          targetY = Math.max(goalTop, Math.min(goalBottom, ball.y));
+        }
+      } else if (botCar.role === 'balanced') {
+        if ((isTeam1 && ball.x > arenaW * 0.65) || (!isTeam1 && ball.x < arenaW * 0.35)) {
+          targetX = arenaW * 0.5;
+        }
+      }
+
+      const angleToBall = Math.atan2(targetY - botCar.y, targetX - botCar.x);
+      const angleToGoal = Math.atan2(enemyGoalY - ball.y, enemyGoalX - ball.x);
+
+      let finalAngle = angleToBall;
+      if (Math.abs(botCar.x - ball.x) < 120) {
+        finalAngle = (angleToBall * 0.6) + (angleToGoal * 0.4);
+      }
+
+      let diffAngle = finalAngle - botCar.angle;
+      while (diffAngle < -Math.PI) diffAngle += Math.PI * 2;
+      while (diffAngle > Math.PI) diffAngle -= Math.PI * 2;
+
+      botCar.angle += Math.sign(diffAngle) * Math.min(Math.abs(diffAngle), diffTurnFactor);
+      botCar.speed = Math.min(botCar.speed + botCar.accel * diffSpeedFactor, botCar.maxSpeed * diffSpeedFactor);
+    }
+
+    /* CELEBRACIÓN DE GOL Y ANIMACIONES */
+    function triggerGoal(scoringTeam, impactX, impactY) {
+      isGoalPaused = true;
+      playSound('goal');
+
+      goalShockwaves.push({ x: impactX, y: impactY, r: 10, alpha: 1, color: scoringTeam === 1 ? '#3b82f6' : '#f43f5e' });
+      createSparks(impactX, impactY, 25);
+
+      const subtext = scoringTeam === 1 ? "¡EL EQUIPO AZUL HA ANOTADO!" : "¡EL EQUIPO ROJO HA ANOTADO!";
+
+      if (scoringTeam === 1) {
+        scoreTeam1++;
+        document.getElementById('match-p1-score').innerText = scoreTeam1;
+      } else {
+        scoreTeam2++;
+        document.getElementById('match-p2-score').innerText = scoreTeam2;
+      }
+
+      showBanner("¡GOLAZO!", subtext);
+
+      setTimeout(() => {
+        hideBanner();
+        setupTeamsAndEntities();
+        isGoalPaused = false;
+      }, 2500);
+    }
+
+    function showBanner(text, subtext) {
+      const banner = document.getElementById('match-banner');
+      document.getElementById('banner-text').innerText = text;
+      document.getElementById('banner-subtext').innerText = subtext;
+      banner.classList.remove('hidden');
+    }
+
+    function hideBanner() {
+      document.getElementById('match-banner').classList.add('hidden');
+    }
+
+    /* ==========================================
+       10. RENDERIZADO VISUAL DETALLADO (TOP-DOWN)
+       ========================================== */
+    function renderTopDownFrame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const arenaW = canvas.width;
+      const arenaH = canvas.height;
+      const arenaType = document.getElementById('match-arena').value;
+      const goalHeight = 160;
+      const goalTop = (arenaH - goalHeight) / 2;
+
+      if (arenaType === 'cyber') {
+        ctx.fillStyle = "#090d16";
+      } else if (arenaType === 'volcanic') {
+        ctx.fillStyle = "#180808";
+      } else {
+        ctx.fillStyle = "#0b1329";
+      }
+      ctx.fillRect(0, 0, arenaW, arenaH);
+
+      skidmarks.forEach(sm => {
+        ctx.fillStyle = `rgba(0,0,0,${sm.alpha})`;
+        ctx.fillRect(sm.x - 2, sm.y - 2, 4, 4);
+      });
+
+      ctx.strokeStyle = arenaType === 'volcanic' ? "#f97316" : (arenaType === 'cyber' ? "#a855f7" : "#3b82f6");
+      ctx.lineWidth = 4;
+      ctx.strokeRect(15, 15, arenaW - 30, arenaH - 30);
+
+      ctx.beginPath();
+      ctx.arc(arenaW / 2, arenaH / 2, 80, 0, Math.PI * 2);
+      ctx.moveTo(arenaW / 2, 15);
+      ctx.lineTo(arenaW / 2, arenaH - 15);
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(59, 130, 246, 0.15)";
+      ctx.fillRect(0, goalTop, 15, goalHeight);
+      ctx.strokeRect(0, goalTop, 15, goalHeight);
+
+      ctx.fillStyle = "rgba(244, 63, 94, 0.15)";
+      ctx.fillRect(arenaW - 15, goalTop, 15, goalHeight);
+      ctx.strokeRect(arenaW - 15, goalTop, 15, goalHeight);
+
+      particles.forEach(p => {
+        ctx.save();
+        ctx.globalAlpha = p.life / p.maxLife;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+
+      goalShockwaves.forEach(sw => {
+        ctx.save();
+        ctx.strokeStyle = sw.color;
+        ctx.lineWidth = 6;
+        ctx.globalAlpha = Math.max(0, sw.alpha);
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      ctx.save();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+      ctx.beginPath();
+      ctx.arc(ball.x + 4, ball.y + 4, ball.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+      ctx.fillStyle = "#fbbf24";
+      ctx.shadowColor = "#fbbf24";
+      ctx.shadowBlur = 16;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+      ctx.restore();
+
+      cars.forEach(car => {
+        drawDetailedCar(ctx, car);
+      });
+    }
+
+    /* DIBUJO DE COCHE FUTURISTA Y DEPORTIVO TOP-DOWN */
+    function drawDetailedCar(targetCtx, car) {
+      targetCtx.save();
+      targetCtx.translate(car.x, car.y);
+      targetCtx.rotate(car.angle);
+
+      targetCtx.fillStyle = "rgba(0, 0, 0, 0.4)";
+      targetCtx.fillRect(-car.w / 2 + 3, -car.h / 2 + 3, car.w, car.h);
+
+      targetCtx.fillStyle = "#1e293b";
+      targetCtx.fillRect(-car.w * 0.35, -car.h / 2 - 3, car.w * 0.25, 4);
+      targetCtx.fillRect(-car.w * 0.35, car.h / 2 - 1, car.w * 0.25, 4);
+      targetCtx.fillRect(car.w * 0.15, -car.h / 2 - 3, car.w * 0.25, 4);
+      targetCtx.fillRect(car.w * 0.15, car.h / 2 - 1, car.w * 0.25, 4);
+
+      if (car.skin === 'skin_rainbow') {
+        const time = Date.now() * 0.003;
+        const r = Math.sin(time) * 127 + 128;
+        const g = Math.sin(time + 2) * 127 + 128;
+        const b = Math.sin(time + 4) * 127 + 128;
+        targetCtx.fillStyle = `rgb(${r},${g},${b})`;
+      } else {
+        targetCtx.fillStyle = car.color;
+      }
+
+      targetCtx.beginPath();
+      targetCtx.moveTo(-car.w / 2, -car.h / 3);
+      targetCtx.lineTo(car.w / 3, -car.h / 2);
+      targetCtx.lineTo(car.w / 2, -car.h / 4);
+      targetCtx.lineTo(car.w / 2, car.h / 4);
+      targetCtx.lineTo(car.w / 3, car.h / 2);
+      targetCtx.lineTo(-car.w / 2, car.h / 3);
+      targetCtx.closePath();
+      targetCtx.fill();
+      targetCtx.lineWidth = 2;
+      targetCtx.strokeStyle = "#ffffff";
+      targetCtx.stroke();
+
+      targetCtx.fillStyle = "#030712";
+      targetCtx.beginPath();
+      targetCtx.moveTo(-car.w * 0.1, -car.h * 0.3);
+      targetCtx.lineTo(car.w * 0.2, -car.h * 0.25);
+      targetCtx.lineTo(car.w * 0.2, car.h * 0.25);
+      targetCtx.lineTo(-car.w * 0.1, car.h * 0.3);
+      targetCtx.closePath();
+      targetCtx.fill();
+
+      targetCtx.fillStyle = "#0f172a";
+      targetCtx.fillRect(-car.w / 2 - 4, -car.h / 2 + 2, 5, car.h - 4);
+      targetCtx.strokeStyle = "#64748b";
+      targetCtx.strokeRect(-car.w / 2 - 4, -car.h / 2 + 2, 5, car.h - 4);
+
+      targetCtx.fillStyle = "#38bdf8";
+      targetCtx.fillRect(car.w / 2 - 3, -car.h / 3, 4, 3);
+      targetCtx.fillRect(car.w / 2 - 3, car.h / 3 - 3, 4, 3);
+
+      targetCtx.fillStyle = car.isBraking ? "#ff0000" : "#991b1b";
+      targetCtx.fillRect(-car.w / 2, -car.h / 3, 3, 3);
+      targetCtx.fillRect(-car.w / 2, car.h / 3 - 3, 3, 3);
+
+      targetCtx.restore();
+    }
+
+    /* ==========================================
+       11. FIN DE PARTIDA Y RECOMPENSAS
+       ========================================== */
+    function endMatch() {
+      clearInterval(matchTimerInterval);
+      cancelAnimationFrame(gameLoopReq);
+
+      const isWin = scoreTeam1 > scoreTeam2;
+      const earnedCoins = (scoreTeam1 * 25) + (isWin ? 120 : 40);
+      const earnedXP = (scoreTeam1 * 20) + (isWin ? 60 : 15);
+
+      currentUser.stats.matches++;
+      if (isWin) currentUser.stats.wins++;
+      currentUser.stats.goals += scoreTeam1;
+      currentUser.stats.coinsEarned += earnedCoins;
+      currentUser.coins += earnedCoins;
+
+      currentUser.xp += earnedXP;
+      const xpNeeded = currentUser.level * 100;
+      if (currentUser.xp >= xpNeeded) {
+        currentUser.level++;
+        currentUser.xp -= xpNeeded;
+      }
+
+      saveUserData();
+
+      alert(`🏆 ¡Partido Concluido!\nResultado: ${scoreTeam1} - ${scoreTeam2}\nMonedas Ganadas: +${earnedCoins}\nXP Ganada: +${earnedXP}`);
+      showSection('menu');
+    }
+
+    window.onload = () => {
+      loadUserData();
+      showSection('auth');
+      lucide.createIcons();
+    };
+  </script>
+</body>
+</html>
